@@ -17,9 +17,7 @@ class GgufEngine(private val jni: LlamaJniInterface = LlamaJni) : InferenceEngin
     companion object {
         private const val TAG = "GgufEngine"
         private const val N_CTX = 16384
-        // OpenMP crashes observed across multiple ops (glu/mul_mat/rms_norm) via __kmp_invoke_microtask;
-        // single-threaded inference avoids all OpenMP parallelism on this device
-        private const val N_THREADS = 1
+        private val N_THREADS = Runtime.getRuntime().availableProcessors().coerceAtMost(4)
     }
 
     private var handle: Long = 0L
