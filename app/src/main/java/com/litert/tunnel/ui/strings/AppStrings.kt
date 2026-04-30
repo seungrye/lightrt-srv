@@ -79,6 +79,14 @@ class AppStrings(
     val maxObsChars: String,
     val obsCharsDesc: (min: Int, max: Int) -> String,
     val languageLabel: String,
+
+    // ── CORS settings ─────────────────────────────────────────────────
+    val corsTitle: String,
+    val corsDesc: String,
+    val corsAllowAll: String,
+    val corsAddHint: String,
+    val corsAdd: String,
+    val corsEmpty: String,
 )
 
 val EnglishStrings = AppStrings(
@@ -147,6 +155,13 @@ val EnglishStrings = AppStrings(
     maxObsChars = "Max observation chars",
     obsCharsDesc = { min, max -> "Server-side trim  ($min–$max)" },
     languageLabel = "Language",
+
+    corsTitle = "CORS Allowed Origins",
+    corsDesc = "Substring-matched against the Origin header. Use * to allow all.",
+    corsAllowAll = "Allow all (*)",
+    corsAddHint = "e.g. 10.0.0. or myhost",
+    corsAdd = "Add",
+    corsEmpty = "No origins allowed — all cross-origin requests will be blocked.",
 )
 
 val KoreanStrings = AppStrings(
@@ -215,6 +230,13 @@ val KoreanStrings = AppStrings(
     maxObsChars = "최대 관측 문자",
     obsCharsDesc = { min, max -> "서버 측 트림  ($min–$max)" },
     languageLabel = "언어",
+
+    corsTitle = "CORS 허용 주소",
+    corsDesc = "Origin 헤더에 포함된 문자열과 매칭됩니다. *로 설정하면 모두 허용.",
+    corsAllowAll = "모두 허용 (*)",
+    corsAddHint = "예) 10.0.0. 또는 myhost",
+    corsAdd = "추가",
+    corsEmpty = "허용된 주소 없음 — 모든 크로스 오리진 요청이 차단됩니다.",
 )
 
 fun appStringsFor(language: AppLanguage): AppStrings = when (language) {

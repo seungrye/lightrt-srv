@@ -98,6 +98,7 @@ class TunnelService : Service() {
                 scope.launch {
                     settingsRepository.settings.collect { settings ->
                         engine.applySettings(settings)
+                        server.updateCorsOrigins(settings.corsOrigins)
                     }
                 }
 

@@ -1,20 +1,24 @@
 package com.litert.tunnel.server
 
+import com.litert.tunnel.engine.EngineSettings
 import com.litert.tunnel.engine.InferenceEngine
 import com.litert.tunnel.engine.Message
 import com.litert.tunnel.repository.RequestLog
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
@@ -34,6 +38,13 @@ class TunnelServer(
     var port: Int = 8080
         private set
 
+    @Volatile private var corsOrigins: List<String> = EngineSettings.DEFAULT_CORS_ORIGINS
+
+    fun updateCorsOrigins(origins: List<String>) { corsOrigins = origins }
+
+    private fun isOriginAllowed(origin: String): Boolean =
+        corsOrigins.any { pattern -> pattern == EngineSettings.CORS_ALLOW_ALL || origin.contains(pattern) }
+
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
 
     /**
@@ -42,7 +53,6 @@ class TunnelServer(
      */
     fun install(app: Application) = app.apply {
         install(ContentNegotiation) { json(json) }
-        install(CORS) { anyHost() }
         install(StatusPages) {
             exception<Throwable> { call, cause ->
                 call.respond(
@@ -51,6 +61,23 @@ class TunnelServer(
                 )
             }
         }
+        // Manual CORS: check Origin header against allowed patterns on every call
+        intercept(ApplicationCallPipeline.Plugins) {
+            val origin = call.request.headers[HttpHeaders.Origin]
+            if (origin != null) {
+                if (isOriginAllowed(origin)) {
+                    call.response.headers.append(HttpHeaders.AccessControlAllowOrigin, origin)
+                    call.response.headers.append(HttpHeaders.AccessControlAllowMethods, "GET, POST, OPTIONS")
+                    call.response.headers.append(HttpHeaders.AccessControlAllowHeaders, "Content-Type, Authorization")
+                }
+                // Handle preflight OPTIONS request
+                if (call.request.httpMethod == HttpMethod.Options) {
+                    call.respond(if (isOriginAllowed(origin)) HttpStatusCode.NoContent else HttpStatusCode.Forbidden)
+                    finish()
+                }
+            }
+        }
+
         routing {
             get("/health") {
                 val start = System.currentTimeMillis()

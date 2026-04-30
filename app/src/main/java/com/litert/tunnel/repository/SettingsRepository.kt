@@ -13,6 +13,8 @@ private const val KEY_MAX_TURNS      = "max_conversation_turns"
 private const val KEY_MAX_CHARS      = "max_input_chars"
 private const val KEY_REPLAY_TURNS   = "context_replay_turns"
 private const val KEY_LANGUAGE       = "app_language"
+private const val KEY_CORS_ORIGINS   = "cors_origins"
+private const val CORS_SEPARATOR     = ","
 
 class SettingsRepository(context: Context) {
 
@@ -29,6 +31,7 @@ class SettingsRepository(context: Context) {
             .putInt(KEY_MAX_TURNS,    settings.maxConversationTurns)
             .putInt(KEY_MAX_CHARS,    settings.maxInputChars)
             .putInt(KEY_REPLAY_TURNS, settings.contextReplayTurns)
+            .putString(KEY_CORS_ORIGINS, settings.corsOrigins.joinToString(CORS_SEPARATOR))
             .apply()
         _settings.update { settings }
     }
@@ -42,6 +45,9 @@ class SettingsRepository(context: Context) {
         maxConversationTurns = prefs.getInt(KEY_MAX_TURNS,    EngineSettings.DEFAULT_MAX_TURNS),
         maxInputChars        = prefs.getInt(KEY_MAX_CHARS,    EngineSettings.DEFAULT_MAX_INPUT_CHARS),
         contextReplayTurns   = prefs.getInt(KEY_REPLAY_TURNS, EngineSettings.DEFAULT_CONTEXT_REPLAY_TURNS),
+        corsOrigins          = prefs.getString(KEY_CORS_ORIGINS, null)
+            ?.split(CORS_SEPARATOR)?.filter { it.isNotBlank() }
+            ?: EngineSettings.DEFAULT_CORS_ORIGINS,
     )
 
     private fun loadLanguage(): AppLanguage =

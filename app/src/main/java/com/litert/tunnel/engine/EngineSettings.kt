@@ -16,6 +16,12 @@ data class EngineSettings(
      * 0 = hard reset (current behaviour, instant). Higher = better continuity, slower reset.
      */
     val contextReplayTurns: Int = DEFAULT_CONTEXT_REPLAY_TURNS,
+    /**
+     * CORS allowed origin patterns. Each entry is a substring matched against the
+     * incoming Origin header (e.g. "192.168." matches any 192.168.x.x origin).
+     * Use listOf("*") to allow all origins.
+     */
+    val corsOrigins: List<String> = DEFAULT_CORS_ORIGINS,
 ) {
     companion object {
         const val DEFAULT_MAX_TURNS            = 8
@@ -28,5 +34,8 @@ data class EngineSettings(
         const val MAX_INPUT_CHARS = 4096
         const val MIN_REPLAY_TURNS = 0
         const val MAX_REPLAY_TURNS = 6
+
+        val DEFAULT_CORS_ORIGINS = listOf("localhost", "127.0.0.1", "192.168.")
+        const val CORS_ALLOW_ALL = "*"
     }
 }

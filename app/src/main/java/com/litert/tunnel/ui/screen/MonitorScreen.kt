@@ -18,14 +18,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +54,7 @@ import com.litert.tunnel.engine.EngineMetrics
 import com.litert.tunnel.engine.EngineSettings
 import com.litert.tunnel.ui.strings.AppLanguage
 import com.litert.tunnel.ui.strings.LocalStrings
+import com.litert.tunnel.ui.theme.Error
 import com.litert.tunnel.ui.theme.OnSurfaceMuted
 import com.litert.tunnel.ui.theme.Primary
 import com.litert.tunnel.ui.theme.Surface
@@ -367,6 +376,106 @@ private fun SettingsCard(
             steps = (EngineSettings.MAX_INPUT_CHARS - EngineSettings.MIN_INPUT_CHARS) / 256 - 1,
             colors = sliderColors(), modifier = Modifier.fillMaxWidth(),
         )
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── CORS allowed origins ───────────────────────────────────────
+        CorsOriginsSection(
+            origins = settings.corsOrigins,
+            onOriginsChange = { onSettingsChange(settings.copy(corsOrigins = it)) },
+        )
+    }
+}
+
+@Composable
+private fun CorsOriginsSection(
+    origins: List<String>,
+    onOriginsChange: (List<String>) -> Unit,
+) {
+    val s = LocalStrings.current
+    val allowAll = origins.contains(EngineSettings.CORS_ALLOW_ALL)
+    var newOrigin by remember { mutableStateOf("") }
+
+    Text(s.corsTitle, color = Color.White, fontSize = 13.sp)
+    Text(s.corsDesc, color = OnSurfaceMuted, fontSize = 11.sp)
+
+    Spacer(Modifier.height(8.dp))
+
+    // Allow-all toggle chip
+    LanguageChip(
+        label = s.corsAllowAll,
+        selected = allowAll,
+        onClick = {
+            onOriginsChange(
+                if (allowAll) EngineSettings.DEFAULT_CORS_ORIGINS
+                else listOf(EngineSettings.CORS_ALLOW_ALL)
+            )
+        },
+    )
+
+    if (!allowAll) {
+        Spacer(Modifier.height(8.dp))
+
+        if (origins.isEmpty()) {
+            Text(s.corsEmpty, color = Error, fontSize = 11.sp)
+        } else {
+            origins.forEach { origin ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        origin,
+                        color = Primary,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = { onOriginsChange(origins - origin) },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = OnSurfaceMuted)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                value = newOrigin,
+                onValueChange = { newOrigin = it },
+                placeholder = { Text(s.corsAddHint, color = OnSurfaceMuted, fontSize = 12.sp) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Primary,
+                    unfocusedBorderColor = OnSurfaceMuted,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    cursorColor = Primary,
+                ),
+            )
+            TextButton(
+                onClick = {
+                    val trimmed = newOrigin.trim()
+                    if (trimmed.isNotEmpty() && !origins.contains(trimmed)) {
+                        onOriginsChange(origins + trimmed)
+                        newOrigin = ""
+                    }
+                },
+                enabled = newOrigin.trim().isNotEmpty(),
+            ) {
+                Text(s.corsAdd, color = Primary)
+            }
+        }
     }
 }
 
