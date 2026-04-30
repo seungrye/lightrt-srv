@@ -11,7 +11,9 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.litert.tunnel.MainActivity
 import com.litert.tunnel.engine.EngineConfig
-import com.litert.tunnel.engine.LiteRTEngine
+import com.litert.tunnel.engine.InferenceEngine
+import com.litert.tunnel.engine.InferenceEngineFactory
+import com.litert.tunnel.engine.ResourceMonitor
 import com.litert.tunnel.repository.SettingsRepository
 import com.litert.tunnel.repository.TunnelRepository
 import com.litert.tunnel.server.TunnelServer
@@ -19,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class TunnelService : Service() {
@@ -28,7 +31,6 @@ class TunnelService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "tunnel_server"
         const val EXTRA_MODEL_PATH = "model_path"
-        const val EXTRA_USE_GPU = "use_gpu"
         const val ACTION_STOP = "com.litert.tunnel.ACTION_STOP"
 
         /** Shared repository — set by [TunnelApplication], read here. */
@@ -37,7 +39,7 @@ class TunnelService : Service() {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var llmEngine: LiteRTEngine? = null
+    private var llmEngine: InferenceEngine? = null
     private var apiServer: TunnelServer? = null
 
     override fun onCreate() {
@@ -55,22 +57,24 @@ class TunnelService : Service() {
             repository.setError("No model path provided")
             return START_NOT_STICKY
         }
-        val useGpu = intent.getBooleanExtra(EXTRA_USE_GPU, true)
 
         startForegroundWithNotification("LiteRT Tunnel — Loading model…")
         repository.setLoading()
 
         scope.launch {
             try {
-                val engine = LiteRTEngine(applicationContext)
+                val engine = InferenceEngineFactory.create(modelPath, applicationContext)
                 llmEngine = engine
 
-                // Apply persisted settings before first inference call
-                engine.applySettings(settingsRepository.settings.value)
+                val currentSettings = settingsRepository.settings.value
+                engine.applySettings(currentSettings)
 
-                val ok = engine.initialize(EngineConfig(modelPath = modelPath, useGpu = useGpu))
+                val ok = engine.initialize(EngineConfig(
+                    modelPath = modelPath,
+                    backendOrder = currentSettings.backendOrder,
+                ))
                 if (!ok) {
-                    repository.setError("Failed to initialize LiteRT engine")
+                    repository.setError("Failed to initialize engine for: $modelPath")
                     stopSelf()
                     return@launch
                 }
@@ -92,6 +96,15 @@ class TunnelService : Service() {
                 // Forward engine metrics to the repository so the UI can observe them
                 scope.launch {
                     engine.metrics.collect { repository.updateEngineMetrics(it) }
+                }
+
+                // Collect CPU/RAM samples every 2 seconds
+                scope.launch(Dispatchers.IO) {
+                    val monitor = ResourceMonitor(applicationContext)
+                    while (true) {
+                        delay(2_000)
+                        repository.appendResourceSample(monitor.sample())
+                    }
                 }
 
                 // Apply settings changes live — no server restart needed
@@ -119,6 +132,7 @@ class TunnelService : Service() {
         scope.cancel()
         repository.setStopped()
         repository.resetEngineMetrics()
+        repository.resetResourceHistory()
         super.onDestroy()
     }
 

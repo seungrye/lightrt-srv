@@ -1,6 +1,7 @@
 package com.litert.tunnel.repository
 
 import android.content.Context
+import com.litert.tunnel.engine.Backend
 import com.litert.tunnel.engine.EngineSettings
 import com.litert.tunnel.ui.strings.AppLanguage
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,13 +9,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-private const val PREFS_NAME         = "engine_settings"
-private const val KEY_MAX_TURNS      = "max_conversation_turns"
-private const val KEY_MAX_CHARS      = "max_input_chars"
-private const val KEY_REPLAY_TURNS   = "context_replay_turns"
-private const val KEY_LANGUAGE       = "app_language"
-private const val KEY_CORS_ORIGINS   = "cors_origins"
-private const val CORS_SEPARATOR     = ","
+private const val PREFS_NAME           = "engine_settings"
+private const val KEY_MAX_TURNS        = "max_conversation_turns"
+private const val KEY_MAX_CHARS        = "max_input_chars"
+private const val KEY_REPLAY_TURNS     = "context_replay_turns"
+private const val KEY_LANGUAGE         = "app_language"
+private const val KEY_CORS_ORIGINS     = "cors_origins"
+private const val KEY_BACKEND_ORDER    = "backend_order"
+private const val SEPARATOR            = ","
 
 class SettingsRepository(context: Context) {
 
@@ -28,10 +30,11 @@ class SettingsRepository(context: Context) {
 
     fun save(settings: EngineSettings) {
         prefs.edit()
-            .putInt(KEY_MAX_TURNS,    settings.maxConversationTurns)
-            .putInt(KEY_MAX_CHARS,    settings.maxInputChars)
-            .putInt(KEY_REPLAY_TURNS, settings.contextReplayTurns)
-            .putString(KEY_CORS_ORIGINS, settings.corsOrigins.joinToString(CORS_SEPARATOR))
+            .putInt(KEY_MAX_TURNS,     settings.maxConversationTurns)
+            .putInt(KEY_MAX_CHARS,     settings.maxInputChars)
+            .putInt(KEY_REPLAY_TURNS,  settings.contextReplayTurns)
+            .putString(KEY_CORS_ORIGINS,  settings.corsOrigins.joinToString(SEPARATOR))
+            .putString(KEY_BACKEND_ORDER, settings.backendOrder.joinToString(SEPARATOR) { it.name })
             .apply()
         _settings.update { settings }
     }
@@ -46,8 +49,13 @@ class SettingsRepository(context: Context) {
         maxInputChars        = prefs.getInt(KEY_MAX_CHARS,    EngineSettings.DEFAULT_MAX_INPUT_CHARS),
         contextReplayTurns   = prefs.getInt(KEY_REPLAY_TURNS, EngineSettings.DEFAULT_CONTEXT_REPLAY_TURNS),
         corsOrigins          = prefs.getString(KEY_CORS_ORIGINS, null)
-            ?.split(CORS_SEPARATOR)?.filter { it.isNotBlank() }
+            ?.split(SEPARATOR)?.filter { it.isNotBlank() }
             ?: EngineSettings.DEFAULT_CORS_ORIGINS,
+        backendOrder         = prefs.getString(KEY_BACKEND_ORDER, null)
+            ?.split(SEPARATOR)
+            ?.mapNotNull { runCatching { Backend.valueOf(it) }.getOrNull() }
+            ?.ifEmpty { null }
+            ?: EngineSettings.DEFAULT_BACKEND_ORDER,
     )
 
     private fun loadLanguage(): AppLanguage =

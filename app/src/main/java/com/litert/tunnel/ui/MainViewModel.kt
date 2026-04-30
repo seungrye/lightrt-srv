@@ -52,6 +52,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val engineMetrics: StateFlow<EngineMetrics> = repo.engineMetrics
         .stateIn(viewModelScope, SharingStarted.Eagerly, repo.engineMetrics.value)
 
+    val resourceHistory: StateFlow<List<com.litert.tunnel.engine.ResourceSample>> = repo.resourceHistory
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val engineSettings: StateFlow<EngineSettings> = settingsRepo.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, settingsRepo.settings.value)
 
@@ -62,6 +65,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveLanguage(lang: AppLanguage) = settingsRepo.saveLanguage(lang)
 
+    private val modelsDir: File
+        get() = getApplication<Application>().run { getExternalFilesDir(null) ?: filesDir }
+
+    private val _customModels = MutableStateFlow<List<File>>(emptyList())
+    val customModels: StateFlow<List<File>> = _customModels.asStateFlow()
+
+    init { scanCustomModels() }
+
     private val _downloadState = MutableStateFlow(DownloadState())
     val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
 
@@ -69,17 +80,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val chatState: StateFlow<ChatState> = _chatState.asStateFlow()
 
     private val downloader = ModelDownloader()
+
+    fun scanCustomModels() {
+        _customModels.value = (modelsDir.listFiles { f ->
+            val ext = f.extension.lowercase()
+            ext == "gguf" || ext == "litertlm"
+        } ?: emptyArray()).sortedByDescending { it.lastModified() }
+    }
+
+    fun deleteCustomModel(file: File) {
+        file.delete()
+        scanCustomModels()
+    }
     private var generatingJob: Job? = null
 
     // ── Server control ────────────────────────────────────────────────────
 
-    fun startServer(modelPath: String, useGpu: Boolean = true) {
+    fun startServer(modelPath: String) {
         if (tunnelState.value.status == TunnelStatus.LOADING ||
             tunnelState.value.status == TunnelStatus.RUNNING) return
 
         val intent = Intent(getApplication(), TunnelService::class.java).apply {
             putExtra(TunnelService.EXTRA_MODEL_PATH, modelPath)
-            putExtra(TunnelService.EXTRA_USE_GPU, useGpu)
         }
         getApplication<TunnelApplication>().startForegroundService(intent)
     }

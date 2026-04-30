@@ -3,11 +3,23 @@ package com.litert.tunnel.engine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
-data class Message(val role: String, val content: String)
+data class ToolCallInfo(
+    val id: String,
+    val name: String,
+    val arguments: String,
+)
+
+data class Message(
+    val role: String,
+    val content: String,
+    val toolCalls: List<ToolCallInfo>? = null,
+    val toolCallId: String? = null,
+    val name: String? = null,
+)
 
 data class EngineConfig(
     val modelPath: String,
-    val useGpu: Boolean = true,
+    val backendOrder: List<Backend> = EngineSettings.DEFAULT_BACKEND_ORDER,
     val temperature: Double = 0.7,
     val topK: Int = 40,
     val topP: Double = 0.9,
@@ -31,7 +43,7 @@ interface InferenceEngine {
      * The implementation is responsible for extracting the system message (if any)
      * and replaying the conversation context before sending the last user message.
      */
-    fun generate(messages: List<Message>): Flow<String>
+    fun generate(messages: List<Message>, toolsJson: String = "", enableThinking: Boolean = false): Flow<String>
 
     /** Resets conversation context without releasing native resources. */
     fun clearHistory()

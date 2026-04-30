@@ -3,6 +3,7 @@ package com.litert.tunnel.server
 import com.litert.tunnel.engine.EngineSettings
 import com.litert.tunnel.engine.InferenceEngine
 import com.litert.tunnel.engine.Message
+import com.litert.tunnel.engine.ToolCallInfo
 import com.litert.tunnel.repository.RequestLog
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -27,6 +28,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.flow.toList
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -123,7 +125,20 @@ class TunnelServer(
                     }
 
                     val req = call.receive<ChatCompletionRequest>()
-                    val messages = req.messages.map { Message(it.role, it.content) }
+                    val messages = req.messages.map { dto ->
+                        Message(
+                            role = dto.role,
+                            content = dto.content,
+                            toolCalls = dto.toolCalls?.map { tc ->
+                                ToolCallInfo(id = tc.id, name = tc.function.name, arguments = tc.function.arguments)
+                            },
+                            toolCallId = dto.toolCallId,
+                            name = dto.name,
+                        )
+                    }
+                    val toolsJson = if (req.tools.isNullOrEmpty()) "" else {
+                        json.encodeToString(ListSerializer(ToolDefinition.serializer()), req.tools)
+                    }
 
                     if (req.stream) {
                         val reqId = "chatcmpl-${System.currentTimeMillis()}"
@@ -132,7 +147,7 @@ class TunnelServer(
                             write(sseData(firstChunk(reqId, engine.modelName)))
                             flush()
 
-                            engine.generate(messages).collect { token ->
+                            engine.generate(messages, toolsJson).collect { token ->
                                 write(sseData(tokenChunk(reqId, engine.modelName, token)))
                                 flush()
                             }
@@ -143,7 +158,7 @@ class TunnelServer(
                         }
                         onRequest(log("/v1/chat/completions", 200, System.currentTimeMillis() - start))
                     } else {
-                        val tokens = engine.generate(messages).toList()
+                        val tokens = engine.generate(messages, toolsJson).toList()
                         val content = tokens.joinToString("")
                         val elapsed = System.currentTimeMillis() - start
                         call.respond(

@@ -15,8 +15,14 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk { abiFilters += "arm64-v8a" }
     }
     buildFeatures { compose = true }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -31,6 +37,7 @@ android {
         jniLibs.keepDebugSymbols += "**/*.so"
     }
     testOptions {
+        unitTests.isReturnDefaultValues = true
         unitTests.all { it.useJUnitPlatform() }
     }
 }

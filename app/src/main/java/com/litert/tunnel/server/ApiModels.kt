@@ -3,6 +3,34 @@ package com.litert.tunnel.server
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+// ── Tool types ───────────────────────────────────────────────────────────────
+
+@Serializable
+data class ToolDefinition(
+    val type: String = "function",
+    val function: FunctionDefinition,
+)
+
+@Serializable
+data class FunctionDefinition(
+    val name: String,
+    val description: String? = null,
+    val parameters: kotlinx.serialization.json.JsonElement? = null,
+)
+
+@Serializable
+data class ToolCall(
+    val id: String = "",
+    val type: String = "function",
+    val function: FunctionCallInfo,
+)
+
+@Serializable
+data class FunctionCallInfo(
+    val name: String,
+    val arguments: String = "",
+)
+
 // ── Requests ────────────────────────────────────────────────────────────────
 
 @Serializable
@@ -12,10 +40,18 @@ data class ChatCompletionRequest(
     val stream: Boolean = false,
     @SerialName("max_tokens") val maxTokens: Int? = null,
     val temperature: Double? = null,
+    val tools: List<ToolDefinition>? = null,
+    @SerialName("tool_choice") val toolChoice: String? = null,
 )
 
 @Serializable
-data class MessageDto(val role: String, val content: String)
+data class MessageDto(
+    val role: String,
+    val content: String = "",
+    @SerialName("tool_calls") val toolCalls: List<ToolCall>? = null,
+    @SerialName("tool_call_id") val toolCallId: String? = null,
+    val name: String? = null,
+)
 
 // ── Responses ────────────────────────────────────────────────────────────────
 

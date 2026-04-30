@@ -62,12 +62,17 @@ fun ModelsScreen(
     modelsDir: String,
     downloadState: com.litert.tunnel.ui.DownloadState,
     activeModelPath: String,
+    customModels: List<java.io.File>,
     onDownload: (ModelSpec) -> Unit,
     onSelect: (String) -> Unit,
     onDelete: (ModelSpec) -> Unit,
+    onDeleteCustom: (java.io.File) -> Unit,
     onPickFile: () -> Unit,
 ) {
     val s = LocalStrings.current
+    val builtInFilenames = BUILT_IN_MODELS.map { it.filename }.toSet()
+    val customModelCards = customModels.filter { it.name !in builtInFilenames }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -84,7 +89,6 @@ fun ModelsScreen(
             val exists = java.io.File(destPath).let { it.exists() && it.length() >= spec.minValidBytes }
             val isActive = activeModelPath == destPath
 
-            // Only pass downloadState to the card that is actually being downloaded
             val cardDownloadState = if (!exists && downloadState.downloadingFilename == spec.filename)
                 downloadState else null
 
@@ -100,8 +104,62 @@ fun ModelsScreen(
             Spacer(Modifier.height(12.dp))
         }
 
+        if (customModelCards.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text(s.customModelsTitle, color = OnSurfaceMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            customModelCards.forEach { file ->
+                CustomModelCard(
+                    file = file,
+                    isActive = activeModelPath == file.absolutePath,
+                    onSelect = { onSelect(file.absolutePath) },
+                    onDelete = { onDeleteCustom(file) },
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+
         OutlinedButton(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
             Text(s.loadCustom, color = Primary)
+        }
+    }
+}
+
+@Composable
+private fun CustomModelCard(
+    file: java.io.File,
+    isActive: Boolean,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val s = LocalStrings.current
+    val formatBadge = if (file.extension.lowercase() == "gguf") "GGUF" else "LiteRT"
+    val sizeMb = file.length() / 1_048_576f
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface, RoundedCornerShape(12.dp))
+            .padding(16.dp)
+    ) {
+        Row {
+            Column(Modifier.weight(1f)) {
+                Text(file.nameWithoutExtension, color = OnSurface, fontWeight = FontWeight.SemiBold)
+                Text("$formatBadge  •  %.1f GB".format(sizeMb / 1024f), color = OnSurfaceMuted, fontSize = 12.sp)
+            }
+            if (isActive) Text(s.active, color = Success, fontSize = 12.sp)
+        }
+        Spacer(Modifier.height(8.dp))
+        Row {
+            if (!isActive) {
+                Button(
+                    onClick = onSelect,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                ) { Text(s.use, color = Background) }
+                Spacer(Modifier.padding(4.dp))
+            }
+            OutlinedButton(onClick = onDelete) { Text(s.delete, color = Error) }
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.litert.tunnel.repository
 
 import com.litert.tunnel.engine.EngineMetrics
+import com.litert.tunnel.engine.ResourceSample
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +42,14 @@ class TunnelRepository {
 
     fun updateEngineMetrics(metrics: EngineMetrics) = _engineMetrics.update { metrics }
     fun resetEngineMetrics() = _engineMetrics.update { EngineMetrics() }
+
+    private val _resourceHistory = MutableStateFlow<List<ResourceSample>>(emptyList())
+    val resourceHistory: StateFlow<List<ResourceSample>> = _resourceHistory.asStateFlow()
+
+    fun appendResourceSample(sample: ResourceSample) =
+        _resourceHistory.update { (it + sample).takeLast(60) }
+
+    fun resetResourceHistory() = _resourceHistory.update { emptyList() }
 
     fun setLoading() = _state.update { it.copy(status = TunnelStatus.LOADING, error = null) }
 

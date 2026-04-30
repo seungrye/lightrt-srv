@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.litert.tunnel.repository.TunnelStatus
@@ -55,6 +56,7 @@ import java.io.File
 
 class MainActivity : ComponentActivity() {
 
+    private val vm: MainViewModel by viewModels()
     private var activeModelPath by mutableStateOf("")
 
     private val filePicker = registerForActivityResult(
@@ -62,7 +64,23 @@ class MainActivity : ComponentActivity() {
     ) { uri: Uri? ->
         uri ?: return@registerForActivityResult
         val modelsDir = getExternalFilesDir(null) ?: filesDir
-        val dest = File(modelsDir, "custom_${System.currentTimeMillis()}.litertlm")
+
+        // Preserve original extension so InferenceEngineFactory routes correctly
+        val originalName = contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            cursor.moveToFirst()
+            if (idx >= 0) cursor.getString(idx) else null
+        }
+        val ext = originalName?.substringAfterLast('.', "")
+            ?.lowercase()
+            ?.takeIf { it == "gguf" || it == "litertlm" }
+            ?: "litertlm"
+        val destName = if (!originalName.isNullOrEmpty() &&
+            (originalName.endsWith(".gguf", ignoreCase = true) ||
+             originalName.endsWith(".litertlm", ignoreCase = true))
+        ) originalName else "custom_${System.currentTimeMillis()}.$ext"
+        val dest = File(modelsDir, destName)
+
         Toast.makeText(this, "Copying file…", Toast.LENGTH_SHORT).show()
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching {
@@ -72,6 +90,7 @@ class MainActivity : ComponentActivity() {
             }.onSuccess {
                 withContext(Dispatchers.Main) {
                     activeModelPath = dest.absolutePath
+                    vm.scanCustomModels()
                     Toast.makeText(this@MainActivity, "Model loaded!", Toast.LENGTH_SHORT).show()
                 }
             }.onFailure { e ->
@@ -102,13 +121,14 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                val vm: MainViewModel = viewModel()
                 val tunnelState by vm.tunnelState.collectAsState()
                 val downloadState by vm.downloadState.collectAsState()
                 val chatState by vm.chatState.collectAsState()
-                val engineMetrics  by vm.engineMetrics.collectAsState()
-                val engineSettings by vm.engineSettings.collectAsState()
-                val language       by vm.language.collectAsState()
+                val engineMetrics    by vm.engineMetrics.collectAsState()
+                val resourceHistory  by vm.resourceHistory.collectAsState()
+                val engineSettings  by vm.engineSettings.collectAsState()
+                val language        by vm.language.collectAsState()
+                val customModels    by vm.customModels.collectAsState()
 
                 var selectedTab by rememberSaveable { mutableStateOf(0) }
                 val s = appStringsFor(language)
@@ -163,6 +183,7 @@ class MainActivity : ComponentActivity() {
                                 modelsDir = (getExternalFilesDir(null) ?: filesDir).absolutePath,
                                 downloadState = downloadState,
                                 activeModelPath = activeModelPath,
+                                customModels = customModels,
                                 onDownload = { spec ->
                                     val dest = File(getExternalFilesDir(null) ?: filesDir, spec.filename)
                                     vm.downloadModel(spec.url, dest, spec.minValidBytes)
@@ -172,10 +193,18 @@ class MainActivity : ComponentActivity() {
                                     File(getExternalFilesDir(null) ?: filesDir, spec.filename).delete()
                                     Toast.makeText(this@MainActivity, "Deleted", Toast.LENGTH_SHORT).show()
                                 },
+                                onDeleteCustom = { file ->
+                                    vm.deleteCustomModel(file)
+                                    if (activeModelPath == file.absolutePath) {
+                                        activeModelPath = (getExternalFilesDir(null) ?: filesDir)
+                                            .absolutePath + "/${BUILT_IN_MODELS.first().filename}"
+                                    }
+                                },
                                 onPickFile = { filePicker.launch(arrayOf("*/*")) },
                             )
                             3 -> MonitorScreen(
                                 metrics = engineMetrics,
+                                resourceHistory = resourceHistory,
                                 settings = engineSettings,
                                 onSettingsChange = { vm.saveSettings(it) },
                                 language = language,

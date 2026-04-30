@@ -48,9 +48,13 @@ class AppStrings(
     val download: String,
     val downloading: String,
     val loadCustom: String,
+    val customModelsTitle: String,
 
     // ── MonitorScreen ─────────────────────────────────────────────────
     val monitorTitle: String,
+    val resourceTitle: String,
+    val cpuLabel: (Int) -> String,
+    val ramLabel: (usedMb: Long, totalMb: Long) -> String,
     val kvCacheTitle: (max: Int) -> String,
     val turnLabel: (current: Int, max: Int) -> String,
     val autoResetBadge: (count: Int) -> String,
@@ -87,6 +91,10 @@ class AppStrings(
     val corsAddHint: String,
     val corsAdd: String,
     val corsEmpty: String,
+
+    // ── Backend priority ──────────────────────────────────────────────
+    val backendPriorityTitle: String,
+    val backendPriorityDesc: String,
 )
 
 val EnglishStrings = AppStrings(
@@ -124,9 +132,13 @@ val EnglishStrings = AppStrings(
     delete = "Delete",
     download = "Download",
     downloading = "Downloading…",
-    loadCustom = "Load custom .litertlm file…",
+    loadCustom = "Load custom model file (.litertlm / .gguf)…",
+    customModelsTitle = "Custom models",
 
     monitorTitle = "Engine Monitor",
+    resourceTitle = "CPU / RAM",
+    cpuLabel = { "CPU  $it%" },
+    ramLabel = { used, total -> "RAM  ${used}/${total} MB" },
     kvCacheTitle = { "KV CACHE TURNS  (max $it)" },
     turnLabel = { c, m -> "Turn $c / $m" },
     autoResetBadge = { "⚡ ${it}× reset" },
@@ -162,6 +174,9 @@ val EnglishStrings = AppStrings(
     corsAddHint = "e.g. 10.0.0. or myhost",
     corsAdd = "Add",
     corsEmpty = "No origins allowed — all cross-origin requests will be blocked.",
+
+    backendPriorityTitle = "Backend Priority",
+    backendPriorityDesc = "Tried top-to-bottom. Takes effect on next server start.",
 )
 
 val KoreanStrings = AppStrings(
@@ -199,9 +214,13 @@ val KoreanStrings = AppStrings(
     delete = "삭제",
     download = "다운로드",
     downloading = "다운로드 중…",
-    loadCustom = "커스텀 .litertlm 파일 불러오기…",
+    loadCustom = "커스텀 모델 파일 불러오기 (.litertlm / .gguf)…",
+    customModelsTitle = "커스텀 모델",
 
     monitorTitle = "엔진 모니터",
+    resourceTitle = "CPU / RAM",
+    cpuLabel = { "CPU  $it%" },
+    ramLabel = { used, total -> "RAM  ${used}/${total} MB" },
     kvCacheTitle = { "KV 캐시 턴  (최대 $it)" },
     turnLabel = { c, m -> "$c / $m 턴" },
     autoResetBadge = { "⚡ ${it}× 리셋" },
@@ -237,6 +256,9 @@ val KoreanStrings = AppStrings(
     corsAddHint = "예) 10.0.0. 또는 myhost",
     corsAdd = "추가",
     corsEmpty = "허용된 주소 없음 — 모든 크로스 오리진 요청이 차단됩니다.",
+
+    backendPriorityTitle = "백엔드 우선순위",
+    backendPriorityDesc = "위에서 아래 순서로 시도합니다. 다음 서버 시작 시 적용됩니다.",
 )
 
 fun appStringsFor(language: AppLanguage): AppStrings = when (language) {

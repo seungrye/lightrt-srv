@@ -9,6 +9,7 @@ import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig as LiteRTEngineConfig
 import com.google.ai.edge.litertlm.SamplerConfig
+import com.litert.tunnel.engine.Backend as EngineBackend
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,18 +62,30 @@ class LiteRTEngine(private val context: Context) : InferenceEngine {
                 topP = config.topP,
                 temperature = config.temperature,
             )
-            tryInit(config, useGpu = config.useGpu)
+            for (backend in config.backendOrder) {
+                Log.i(TAG, "Trying backend: ${backend.displayName}")
+                val ok = tryInitBackend(config, backend)
+                if (ok) return@withContext true
+                Log.w(TAG, "${backend.displayName} failed — trying next backend")
+            }
+            Log.e(TAG, "All backends failed for: ${config.modelPath}")
+            false
         }
     }
 
-    private suspend fun tryInit(config: EngineConfig, useGpu: Boolean): Boolean {
+    private suspend fun tryInitBackend(config: EngineConfig, backend: EngineBackend): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                val backend = if (useGpu) Backend.GPU() else Backend.CPU()
+                val liteRTBackend: Backend = when (backend) {
+                    EngineBackend.NPU    -> Backend.GPU() // LiteRT may support NPU via GPU delegation
+                    EngineBackend.GPU    -> Backend.GPU()
+                    EngineBackend.VULKAN -> Backend.GPU()
+                    EngineBackend.CPU    -> Backend.CPU()
+                }
                 val liteRTConfig = LiteRTEngineConfig(
                     modelPath = config.modelPath,
-                    backend = backend,
-                    visionBackend = backend,
+                    backend = liteRTBackend,
+                    visionBackend = liteRTBackend,
                     cacheDir = context.cacheDir.absolutePath,
                 )
                 val newEngine = Engine(liteRTConfig)
@@ -82,19 +95,14 @@ class LiteRTEngine(private val context: Context) : InferenceEngine {
                 conversation = newConversation(newEngine, currentSystemPrompt)
                 conversationTurns = 0
                 _metrics.update { EngineMetrics(maxConversationTurns = maxConversationTurns) }
-                backendName = if (useGpu) "GPU" else "CPU"
+                backendName = backend.displayName
                 isReady = true
                 Log.i(TAG, "Engine ready — backend=$backendName model=$modelName")
                 true
             } catch (e: Exception) {
-                Log.e(TAG, "Init failed (useGpu=$useGpu)", e)
-                if (useGpu) {
-                    Log.w(TAG, "GPU failed — retrying with CPU")
-                    tryInit(config, useGpu = false)
-                } else {
-                    isReady = false
-                    false
-                }
+                Log.e(TAG, "Init failed (backend=${backend.displayName})", e)
+                isReady = false
+                false
             }
         }
     }
@@ -110,7 +118,7 @@ class LiteRTEngine(private val context: Context) : InferenceEngine {
      * - Trims each user message to [maxInputChars] before inference.
      * - Updates [metrics] on every call.
      */
-    override fun generate(messages: List<Message>): Flow<String> = flow {
+    override fun generate(messages: List<Message>, toolsJson: String, enableThinking: Boolean): Flow<String> = flow {
         val systemContent = messages.firstOrNull { it.role == "system" }?.content
         val turns = messages.filter { it.role != "system" }
 

@@ -18,8 +18,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.litert.tunnel.engine.EngineMetrics
 import com.litert.tunnel.engine.EngineSettings
+import com.litert.tunnel.engine.ResourceSample
 import com.litert.tunnel.ui.strings.AppLanguage
 import com.litert.tunnel.ui.strings.LocalStrings
 import com.litert.tunnel.ui.theme.Error
@@ -67,6 +72,7 @@ private val GaugeBg     = Color(0xFF2A2A2A)
 @Composable
 fun MonitorScreen(
     metrics: EngineMetrics,
+    resourceHistory: List<ResourceSample>,
     settings: EngineSettings,
     onSettingsChange: (EngineSettings) -> Unit,
     language: AppLanguage,
@@ -82,10 +88,90 @@ fun MonitorScreen(
     ) {
         Text(s.monitorTitle, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
+        ResourceUsageCard(resourceHistory)
         KvCacheCard(metrics)
         ObservationSizeCard(metrics, settings)
         StatsCard(metrics)
         SettingsCard(settings, onSettingsChange, language, onLanguageChange)
+    }
+}
+
+// ── Resource usage (CPU + RAM) ─────────────────────────────────────────────
+
+private val CpuColor = Color(0xFF4FC3F7)  // light blue
+private val RamColor = Color(0xFFFFA726)  // amber
+
+@Composable
+private fun ResourceUsageCard(history: List<ResourceSample>) {
+    val s = LocalStrings.current
+    SectionCard(title = s.resourceTitle) {
+        if (history.isEmpty()) {
+            EmptyChartHint()
+            return@SectionCard
+        }
+
+        val latest = history.last()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            // Legend + latest values
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LegendDot(CpuColor, s.cpuLabel(latest.cpuPercent.toInt()))
+                LegendDot(RamColor, s.ramLabel(latest.ramUsedMb, latest.ramTotalMb))
+            }
+            Text(s.oldest, color = OnSurfaceMuted, fontSize = 10.sp)
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp)
+        ) {
+            val w = size.width
+            val h = size.height
+            val n = history.size
+
+            fun xOf(i: Int) = if (n > 1) i * w / (n - 1) else w / 2f
+            fun yOf(pct: Float) = h - (pct.coerceIn(0f, 100f) / 100f) * h
+
+            // Draw reference line at 80%
+            drawLine(
+                color = Color.White.copy(alpha = 0.08f),
+                start = Offset(0f, yOf(80f)),
+                end   = Offset(w,   yOf(80f)),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
+            )
+
+            listOf(
+                history.map { it.cpuPercent } to CpuColor,
+                history.map { it.ramPercent } to RamColor,
+            ).forEach { (values, color) ->
+                if (values.size < 2) return@forEach
+                val path = Path().apply {
+                    moveTo(xOf(0), yOf(values[0]))
+                    for (i in 1 until values.size) lineTo(xOf(i), yOf(values[i]))
+                }
+                drawPath(
+                    path  = path,
+                    color = color,
+                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+                )
+                // Latest dot
+                drawCircle(color = color, radius = 3.dp.toPx(),
+                    center = Offset(xOf(values.lastIndex), yOf(values.last())))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Canvas(Modifier.size(8.dp)) { drawCircle(color) }
+        Text(label, color = color, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -379,11 +465,124 @@ private fun SettingsCard(
 
         Spacer(Modifier.height(16.dp))
 
+        // ── Backend priority order ─────────────────────────────────────
+        BackendPrioritySection(
+            order = settings.backendOrder,
+            onOrderChange = { onSettingsChange(settings.copy(backendOrder = it)) },
+        )
+
+        Spacer(Modifier.height(16.dp))
+
         // ── CORS allowed origins ───────────────────────────────────────
         CorsOriginsSection(
             origins = settings.corsOrigins,
             onOriginsChange = { onSettingsChange(settings.copy(corsOrigins = it)) },
         )
+    }
+}
+
+@Composable
+private fun BackendPrioritySection(
+    order: List<com.litert.tunnel.engine.Backend>,
+    onOrderChange: (List<com.litert.tunnel.engine.Backend>) -> Unit,
+) {
+    val s = LocalStrings.current
+    val allBackends = com.litert.tunnel.engine.Backend.entries
+
+    Text(s.backendPriorityTitle, color = Color.White, fontSize = 13.sp)
+    Text(s.backendPriorityDesc, color = OnSurfaceMuted, fontSize = 11.sp)
+
+    Spacer(Modifier.height(8.dp))
+
+    // Show all backends; those not in `order` are appended at the end as inactive
+    val fullOrder = order + allBackends.filter { it !in order }
+
+    fullOrder.forEachIndexed { idx, backend ->
+        val active = backend in order
+        val activeIdx = order.indexOf(backend)
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            // Rank badge or dash for inactive
+            Text(
+                if (active) "${activeIdx + 1}" else "–",
+                color = if (active) Primary else OnSurfaceMuted,
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.widthIn(min = 20.dp),
+            )
+
+            Text(
+                backend.displayName,
+                color = if (active) Color.White else OnSurfaceMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                // Enable / disable toggle
+                IconButton(
+                    onClick = {
+                        onOrderChange(
+                            if (active) order - backend
+                            else order + backend
+                        )
+                    },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        if (active) Icons.Default.Close else Icons.Default.Add,
+                        contentDescription = if (active) "Remove" else "Add",
+                        tint = if (active) OnSurfaceMuted else Primary,
+                    )
+                }
+
+                if (active) {
+                    IconButton(
+                        onClick = {
+                            if (activeIdx > 0) {
+                                val newOrder = order.toMutableList()
+                                newOrder.removeAt(activeIdx)
+                                newOrder.add(activeIdx - 1, backend)
+                                onOrderChange(newOrder)
+                            }
+                        },
+                        enabled = activeIdx > 0,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Move up",
+                            tint = if (activeIdx > 0) Color.White else OnSurfaceMuted,
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            if (activeIdx < order.lastIndex) {
+                                val newOrder = order.toMutableList()
+                                newOrder.removeAt(activeIdx)
+                                newOrder.add(activeIdx + 1, backend)
+                                onOrderChange(newOrder)
+                            }
+                        },
+                        enabled = activeIdx < order.lastIndex,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Move down",
+                            tint = if (activeIdx < order.lastIndex) Color.White else OnSurfaceMuted,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
