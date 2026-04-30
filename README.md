@@ -9,6 +9,12 @@
 > 모든 것이 [Claude](https://claude.ai) (Anthropic)에 의해 작성되었습니다.
 >
 > _This project is fully AI-driven — designed, implemented, and documented by Claude._
+>
+> ---
+>
+> ⚠️ **단, AI가 만든 코드인 만큼 완벽하지 않습니다.**
+> 예상치 못한 동작, 버그, 엣지 케이스 오작동이 있을 수 있습니다.
+> 프로덕션 환경 사용은 충분한 검증 후 본인 책임 하에 진행하세요.
 
 ---
 
