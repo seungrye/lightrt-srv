@@ -16,6 +16,7 @@ interface LlamaJniInterface {
         callback: LlamaJni.TokenCallback,
     )
     fun nativeClearContext(handle: Long)
+    fun nativeAbortGenerate(handle: Long)
     fun nativeFree(handle: Long)
 }
 
@@ -54,5 +55,6 @@ object LlamaJni : LlamaJniInterface {
         callback: TokenCallback,
     )
     override external fun nativeClearContext(handle: Long)
+    override external fun nativeAbortGenerate(handle: Long)
     override external fun nativeFree(handle: Long)
 }

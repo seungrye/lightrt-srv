@@ -2,6 +2,8 @@
 #include <android/log.h>
 #include <string>
 #include <vector>
+#include <atomic>
+#include <mutex>
 #include "llama.h"
 
 #define LOG_TAG "LlamaJni"
@@ -13,7 +15,9 @@ struct LlamaHandle {
     llama_context * ctx     = nullptr;
     llama_sampler * sampler = nullptr;
     int n_ctx = 0;
-    std::string chat_template; // raw Jinja2 template from GGUF metadata
+    std::string chat_template;
+    std::mutex              gen_mutex;       // serialises concurrent generate calls
+    std::atomic<bool>       abort_requested{false};
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -260,8 +264,8 @@ Java_com_litert_tunnel_engine_LlamaJni_nativeGenerate(
     auto * h = to_handle(ptr);
     if (!h || !h->ctx || !h->model) return;
 
-    // Stateless: clear KV cache before every generation so full history
-    // submitted at position 0 never conflicts with previous tokens.
+    std::lock_guard<std::mutex> lock(h->gen_mutex);
+    h->abort_requested.store(false);
     llama_memory_clear(llama_get_memory(h->ctx), false);
 
     // Unpack JNI arrays
@@ -366,7 +370,7 @@ Java_com_litert_tunnel_engine_LlamaJni_nativeGenerate(
     int n_pos = (int)tokens.size();
     char piece_buf[256];
     std::string utf8_buf;  // accumulates bytes until a complete UTF-8 sequence is ready
-    while (n_pos < h->n_ctx) {
+    while (n_pos < h->n_ctx && !h->abort_requested.load()) {
         llama_token token_id = llama_sampler_sample(h->sampler, h->ctx, -1);
         llama_sampler_accept(h->sampler, token_id);
 
@@ -417,6 +421,19 @@ Java_com_litert_tunnel_engine_LlamaJni_nativeClearContext(
     if (!h || !h->ctx) return;
     llama_memory_clear(llama_get_memory(h->ctx), false);
     LOGI("KV cache cleared");
+}
+
+// void nativeAbortGenerate(long handle)
+// Sets abort flag and blocks until any running nativeGenerate call exits.
+JNIEXPORT void JNICALL
+Java_com_litert_tunnel_engine_LlamaJni_nativeAbortGenerate(
+        JNIEnv * env, jclass, jlong ptr)
+{
+    auto * h = to_handle(ptr);
+    if (!h) return;
+    h->abort_requested.store(true);
+    std::lock_guard<std::mutex> lock(h->gen_mutex);  // waits for generate to exit
+    LOGI("Generation aborted");
 }
 
 // void nativeFree(long handle)

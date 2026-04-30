@@ -114,6 +114,7 @@ class GgufEngine(private val jni: LlamaJniInterface = LlamaJni) : InferenceEngin
         }.toTypedArray()
         val toolCallIds = trimmedMessages.map { it.toolCallId ?: "" }.toTypedArray()
 
+        jni.nativeAbortGenerate(handle)  // stops any running generation and waits for it to exit
         jni.nativeGenerate(handle, roles, contents, toolCallsJsonPerMsg, toolCallIds, toolsJson, enableThinking) { token ->
             trySend(token)
         }
