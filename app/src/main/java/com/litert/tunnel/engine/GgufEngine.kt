@@ -16,7 +16,7 @@ class GgufEngine(private val jni: LlamaJniInterface = LlamaJni) : InferenceEngin
 
     companion object {
         private const val TAG = "GgufEngine"
-        private const val N_CTX = 16384
+        private const val N_CTX = 8192
         private val N_THREADS = Runtime.getRuntime().availableProcessors().coerceAtMost(4)
     }
 
