@@ -33,3 +33,8 @@ build/
 *.litertlm
 *.task
 *.tflite
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
