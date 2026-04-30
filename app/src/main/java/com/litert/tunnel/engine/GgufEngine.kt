@@ -16,8 +16,9 @@ class GgufEngine(private val jni: LlamaJniInterface = LlamaJni) : InferenceEngin
 
     companion object {
         private const val TAG = "GgufEngine"
-        private const val N_CTX = 4096
-        private val N_THREADS = Runtime.getRuntime().availableProcessors().coerceAtMost(8)
+        private const val N_CTX = 16384
+        // OpenMP GLU SIMD crash observed at ≥8 threads; cap at 4 to avoid race/alignment fault
+        private val N_THREADS = Runtime.getRuntime().availableProcessors().coerceAtMost(4)
     }
 
     private var handle: Long = 0L

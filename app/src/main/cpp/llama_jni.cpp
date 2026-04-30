@@ -30,6 +30,24 @@ static jstring string_to_jstring(JNIEnv * env, const std::string & s) {
     return env->NewStringUTF(s.c_str());
 }
 
+// Returns the byte length of all complete UTF-8 characters at the start of [data, len).
+// Partial sequences at the end are excluded.
+static size_t complete_utf8_len(const char * data, size_t len) {
+    size_t i = 0;
+    while (i < len) {
+        unsigned char c = (unsigned char)data[i];
+        size_t char_len;
+        if      (c < 0x80)         char_len = 1;
+        else if ((c & 0xE0) == 0xC0) char_len = 2;
+        else if ((c & 0xF0) == 0xE0) char_len = 3;
+        else if ((c & 0xF8) == 0xF0) char_len = 4;
+        else { i++; continue; }  // invalid lead byte — skip
+        if (i + char_len > len) break;  // incomplete at tail
+        i += char_len;
+    }
+    return i;
+}
+
 static LlamaHandle * to_handle(jlong ptr) {
     return reinterpret_cast<LlamaHandle *>(ptr);
 }
@@ -347,6 +365,7 @@ Java_com_litert_tunnel_engine_LlamaJni_nativeGenerate(
     // Generate tokens
     int n_pos = (int)tokens.size();
     char piece_buf[256];
+    std::string utf8_buf;  // accumulates bytes until a complete UTF-8 sequence is ready
     while (n_pos < h->n_ctx) {
         llama_token token_id = llama_sampler_sample(h->sampler, h->ctx, -1);
         llama_sampler_accept(h->sampler, token_id);
@@ -355,11 +374,16 @@ Java_com_litert_tunnel_engine_LlamaJni_nativeGenerate(
 
         int n = llama_token_to_piece(vocab, token_id, piece_buf, sizeof(piece_buf), 0, false);
         if (n > 0) {
-            std::string piece(piece_buf, n);
-            jstring j_piece = env->NewStringUTF(piece.c_str());
-            env->CallVoidMethod(callback, on_token, j_piece);
-            env->DeleteLocalRef(j_piece);
-            if (env->ExceptionCheck()) break;
+            utf8_buf.append(piece_buf, n);
+            size_t complete = complete_utf8_len(utf8_buf.data(), utf8_buf.size());
+            if (complete > 0) {
+                std::string to_send(utf8_buf.data(), complete);
+                utf8_buf.erase(0, complete);
+                jstring j_piece = env->NewStringUTF(to_send.c_str());
+                env->CallVoidMethod(callback, on_token, j_piece);
+                env->DeleteLocalRef(j_piece);
+                if (env->ExceptionCheck()) break;
+            }
         }
 
         llama_batch gen_batch = llama_batch_init(1, 0, 1);
@@ -374,6 +398,12 @@ Java_com_litert_tunnel_engine_LlamaJni_nativeGenerate(
             break;
         }
         llama_batch_free(gen_batch);
+    }
+    // Flush any remaining bytes (should be empty for well-formed output)
+    if (!utf8_buf.empty() && !env->ExceptionCheck()) {
+        jstring j_piece = env->NewStringUTF(utf8_buf.c_str());
+        env->CallVoidMethod(callback, on_token, j_piece);
+        env->DeleteLocalRef(j_piece);
     }
     llama_sampler_reset(h->sampler);
 }

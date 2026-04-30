@@ -18,7 +18,7 @@ from textwrap import dedent
 BASE_URL  = "http://localhost:8080"
 MODEL     = "local"
 MAX_STEPS = 10
-TIMEOUT   = 120  # seconds per LLM call
+TIMEOUT   = 300  # seconds per LLM call
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
