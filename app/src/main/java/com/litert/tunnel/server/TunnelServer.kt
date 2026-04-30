@@ -43,7 +43,17 @@ class TunnelServer(
     fun updateCorsOrigins(origins: List<String>) { corsOrigins = origins }
 
     private fun isOriginAllowed(origin: String): Boolean =
-        corsOrigins.any { pattern -> pattern == EngineSettings.CORS_ALLOW_ALL || origin.contains(pattern) }
+        corsOrigins.any { pattern ->
+            when {
+                pattern == EngineSettings.CORS_ALLOW_ALL -> true
+                pattern.contains('*') -> {
+                    // Convert glob to regex: escape dots, replace * with .*
+                    val regex = pattern.replace(".", "\\.").replace("*", ".*").toRegex()
+                    regex.containsMatchIn(origin)
+                }
+                else -> origin.contains(pattern)
+            }
+        }
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
 

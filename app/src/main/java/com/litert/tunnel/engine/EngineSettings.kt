@@ -35,7 +35,7 @@ data class EngineSettings(
         const val MIN_REPLAY_TURNS = 0
         const val MAX_REPLAY_TURNS = 6
 
-        val DEFAULT_CORS_ORIGINS = listOf("localhost", "127.0.0.1", "192.168.")
+        val DEFAULT_CORS_ORIGINS = listOf("localhost", "127.0.0.1", "192.168.*.*")
         const val CORS_ALLOW_ALL = "*"
     }
 }
