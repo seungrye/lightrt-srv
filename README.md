@@ -1,5 +1,17 @@
 # LiteRT Tunnel
 
+---
+
+> ## 🤖 이 프로젝트는 100% AI가 만들었습니다
+>
+> **단 한 줄의 코드도 인간이 직접 작성하지 않았습니다.**
+> 아이디어 기획부터 아키텍처 설계, 전체 코드 구현, 문서화까지
+> 모든 것이 [Claude](https://claude.ai) (Anthropic)에 의해 작성되었습니다.
+>
+> _This project is fully AI-driven — designed, implemented, and documented by Claude._
+
+---
+
 [Google LiteRT-LM SDK](https://ai.google.dev/edge/litert)를 통해 온디바이스 LLM을 구동하고, **OpenAI 호환 HTTP API**(`localhost:8080`)로 노출하는 Android 앱입니다. 인터넷 없이도 모든 OpenAI 클라이언트가 기기 내 모델과 통신할 수 있습니다.
 
 ## 주요 기능
